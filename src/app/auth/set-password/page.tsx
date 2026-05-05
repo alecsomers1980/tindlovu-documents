@@ -1,58 +1,83 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
-export default function LoginPage() {
+export default function SetPasswordPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [checking, setChecking] = useState(true)
 
   useEffect(() => {
-    if (searchParams.get('reset') === 'success') {
-      setSuccessMessage('Password updated successfully. Please sign in.')
+    async function check() {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/login'); return }
+      const needsPw = user.user_metadata?.needs_password_change
+      if (!needsPw) { router.push('/dashboard'); return }
+      setChecking(false)
     }
-  }, [searchParams])
+    check()
+  }, [router])
+
+  function validatePassword(pw: string): string | null {
+    if (pw.length < 8) return 'At least 8 characters required'
+    return null
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    setSuccessMessage(null)
+
+    const validationError = validatePassword(password)
+    if (validationError) { setError(validationError); return }
+
     setLoading(true)
     const supabase = createClient()
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
+
+    const { error: updateError } = await supabase.auth.updateUser({
       password,
+      data: { needs_password_change: false },
     })
 
-    // Store remember-me preference for session management
-    if (rememberMe) {
-      localStorage.setItem('tindlovu_remember_me', 'true')
-    } else {
-      localStorage.removeItem('tindlovu_remember_me')
-    }
-    if (signInError) {
-      setError(signInError.message)
+    if (updateError) {
+      setError(updateError.message)
       setLoading(false)
       return
     }
+
+    // Also update the profiles table to clear the flag
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ role: 'user' })
+        .eq('id', user.id)
+
+      // If profile doesn't exist yet (trigger may not have fired), ignore
+      void profileError
+    }
+
     router.push('/dashboard')
     router.refresh()
   }
 
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="text-slate-500 text-sm">Checking session...</div>
+      </div>
+    )
+  }
+
   return (
     <div className="relative min-h-screen flex items-center justify-center px-4">
-      {/* Fixed background image */}
       <Image
         src="/Elephant.jpg"
         alt=""
@@ -60,11 +85,8 @@ export default function LoginPage() {
         className="object-cover object-center fixed inset-0 -z-10"
         priority
       />
-
-      {/* Overlay for readability */}
       <div className="fixed inset-0 -z-10 bg-black/40 backdrop-blur-sm" />
 
-      {/* Login card */}
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 p-8 relative z-10">
         <Image
           src="/Logo.webp"
@@ -73,34 +95,17 @@ export default function LoginPage() {
           height={50}
           className="mx-auto mb-6"
         />
+        <h1 className="text-lg font-semibold text-slate-800 text-center mb-2">
+          Set your password
+        </h1>
         <p className="text-sm text-slate-500 text-center mb-8">
-          Sign in to your account
+          Your account requires a new password before you can continue.
         </p>
-
-        {successMessage && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
-            {successMessage}
-          </div>
-        )}
 
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label htmlFor="email" className="text-sm font-medium text-slate-700 mb-1 block">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none"
-            />
-          </div>
-          <div className="mb-4">
             <label htmlFor="password" className="text-sm font-medium text-slate-700 mb-1 block">
-              Password
+              New password
             </label>
             <div className="relative">
               <input
@@ -109,7 +114,8 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                autoComplete="current-password"
+                minLength={8}
+                autoComplete="new-password"
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 pr-10 text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none"
               />
               <button
@@ -121,21 +127,9 @@ export default function LoginPage() {
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
-          </div>
-
-          <div className="flex justify-between items-center mb-6">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-              />
-              <span className="text-sm text-slate-700">Remember me</span>
-            </label>
-            <Link href="/auth/forgot-password" className="text-sm text-amber-600 hover:underline">
-              Forgot password?
-            </Link>
+            <p className={`mt-2 text-xs ${password.length >= 8 ? 'text-green-600' : 'text-slate-500'}`}>
+              At least 8 characters
+            </p>
           </div>
 
           {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
@@ -145,7 +139,7 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full bg-amber-600 text-white rounded-lg px-4 py-2.5 text-sm font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors"
           >
-            {loading ? 'Signing in...' : 'Sign in'}
+            {loading ? 'Setting password...' : 'Set password'}
           </button>
         </form>
       </div>

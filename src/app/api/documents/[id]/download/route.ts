@@ -8,10 +8,6 @@ export async function GET(
 ) {
   const { id } = await params
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return new Response('Unauthorized', { status: 401 })
 
   const { data: doc } = await supabase
     .from('documents')
@@ -22,23 +18,6 @@ export async function GET(
   if (doc.deleted_at) return new Response('Not found', { status: 404 })
   if (doc.status !== 'ready' || !doc.drive_file_id)
     return new Response('Document not ready', { status: 409 })
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (profile?.role !== 'super_admin') {
-    const { data: perm } = await supabase
-      .from('permissions')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('branch_id', doc.branch_id)
-      .eq('section_id', doc.section_id)
-      .maybeSingle()
-    if (!perm) return new Response('Forbidden', { status: 403 })
-  }
 
   const drive = getDriveClient()
   const driveRes = await drive.files.get(

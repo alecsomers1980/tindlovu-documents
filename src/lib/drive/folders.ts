@@ -1,26 +1,11 @@
 import { getDriveClient } from './client'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 
+// The reserved alias for the app's hidden per-user data folder.
+// Files stored under it count against the signed-in user's Drive quota
+// but are only visible to this app (drive.appdata scope).
 export async function ensureRootFolder(): Promise<string> {
-  const envId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID
-  if (envId) return envId
-
-  const drive = getDriveClient()
-  const res = await drive.files.create({
-    requestBody: {
-      name: 'Tindlovu Documents',
-      mimeType: 'application/vnd.google-apps.folder',
-    },
-    fields: 'id',
-  })
-
-  const id = res.data.id
-  if (!id) throw new Error('Drive API did not return an id for root folder')
-
-  console.warn(
-    `Created root folder "${id}". Add GOOGLE_DRIVE_ROOT_FOLDER_ID=${id} to .env.local to reuse it.`,
-  )
-  return id
+  return 'appDataFolder'
 }
 
 export async function ensureBranchFolder(branchId: string): Promise<string> {

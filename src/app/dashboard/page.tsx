@@ -1,25 +1,18 @@
 import { createClient } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth'
 import Link from 'next/link'
 
 export default async function DashboardPage() {
+  const { profile } = await requireAuth()
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, full_name')
-    .eq('id', user!.id)
-    .single()
 
   const { data: branches } = await supabase
     .from('branches')
     .select('id, name, slug')
     .order('name')
 
-  const isSuperAdmin = profile?.role === 'super_admin'
-  const displayName = profile?.full_name ?? user!.email ?? 'User'
+  const isSuperAdmin = profile.role === 'super_admin'
+  const displayName = profile.full_name || profile.email
 
   return (
     <div className="p-8">

@@ -27,7 +27,7 @@ export async function createUser(_prev: State, formData: FormData): Promise<Stat
     email,
     password,
     email_confirm: true,
-    user_metadata: { full_name },
+    user_metadata: { full_name, needs_password_change: true },
   })
 
   if (error) return { ok: false, error: error.message }

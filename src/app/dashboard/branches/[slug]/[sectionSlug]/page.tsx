@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireAuth } from '@/lib/auth'
 import type { Branch, Section, Document } from '@/lib/types'
 import { UploadDocumentDialog } from '@/components/UploadDocumentDialog'
 import { DeleteDocumentButton } from '@/components/DeleteDocumentButton'
@@ -41,12 +42,8 @@ export default async function SectionPage({
   const month = sp.month ?? ''
   const year = sp.year ?? ''
 
+  const { profile } = await requireAuth()
   const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) notFound()
 
   const { data: branch } = await supabase
     .from('branches')
@@ -64,25 +61,16 @@ export default async function SectionPage({
     .single<Section>()
   if (!section) notFound()
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  const isSuperAdmin = profile?.role === 'super_admin'
+  const isSuperAdmin = profile.role === 'super_admin'
   let canUpload = isSuperAdmin
-
-  if (!isSuperAdmin) {
+  if (!canUpload) {
     const { data: perm } = await supabase
       .from('permissions')
       .select('can_upload')
-      .eq('user_id', user.id)
-      .eq('branch_id', branch.id)
+      .eq('user_id', profile.id)
       .eq('section_id', section.id)
       .maybeSingle()
-    if (!perm) notFound()
-    canUpload = !!perm.can_upload
+    canUpload = !!perm?.can_upload
   }
 
   const path = `/dashboard/branches/${branch.slug}/${section.slug}`
@@ -246,6 +234,9 @@ export default async function SectionPage({
                   Date
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  Uploaded
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   Uploaded by
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
@@ -262,6 +253,12 @@ export default async function SectionPage({
                   <td className="px-6 py-4 text-sm font-medium text-slate-900">{doc.name}</td>
                   <td className="px-6 py-4 text-sm text-slate-500">
                     {new Date(doc.document_date).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-500">
+                    {new Date(doc.uploaded_at).toLocaleString('en-ZA', {
+                      day: '2-digit', month: 'short', year: 'numeric',
+                      hour: '2-digit', minute: '2-digit',
+                    })}
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-500">
                     {(doc.uploaded_by && uploaders.get(doc.uploaded_by)) ?? '—'}

@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { requireAuth } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import type { Document } from '@/lib/types'
 import { RestoreButton, PermanentDeleteButton } from '@/components/RecycleBinActions'
@@ -16,26 +16,24 @@ function daysLeft(deletedAt: string): number {
 }
 
 export default async function RecycleBinPage() {
+  const { profile } = await requireAuth()
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) notFound()
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-  if (profile?.role !== 'super_admin') notFound()
+  if (profile.role !== 'super_admin') {
+    return (
+      <div className="p-8">
+        <p className="text-sm text-slate-500">You do not have access to this page.</p>
+      </div>
+    )
+  }
 
-  const { data } = await supabase
+  const { data: documentsData } = await supabase
     .from('documents')
     .select('*, branches(name, slug), sections(name, slug)')
     .not('deleted_at', 'is', null)
     .order('deleted_at', { ascending: false })
 
-  const docs = (data ?? []) as DeletedDoc[]
+  const docs = (documentsData ?? []) as DeletedDoc[]
 
   return (
     <div className="p-8 space-y-6">

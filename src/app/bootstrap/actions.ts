@@ -36,7 +36,7 @@ export async function bootstrapSuperAdmin(
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name },
+      user_metadata: { full_name, needs_password_change: false },
     })
 
     if (userError) return { ok: false, error: userError.message }

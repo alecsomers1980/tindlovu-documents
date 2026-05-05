@@ -17,7 +17,7 @@ const oauth2 = new OAuth2Client(clientId, clientSecret, REDIRECT)
 const url = oauth2.generateAuthUrl({
   access_type: 'offline',
   prompt: 'consent',
-  scope: ['https://www.googleapis.com/auth/drive.file'],
+  scope: ['https://www.googleapis.com/auth/drive.appdata'],
 })
 
 console.log('\n=== Tindlovu Drive OAuth ===\n')
