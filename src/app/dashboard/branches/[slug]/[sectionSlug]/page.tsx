@@ -34,13 +34,14 @@ export default async function SectionPage({
   searchParams,
 }: {
   params: Promise<{ slug: string; sectionSlug: string }>
-  searchParams: Promise<{ q?: string; month?: string; year?: string }>
+  searchParams: Promise<{ q?: string; month?: string; year?: string; uploaded_by?: string }>
 }) {
   const { slug, sectionSlug } = await params
   const sp = await searchParams
   const q = sp.q?.trim() ?? ''
   const month = sp.month ?? ''
   const year = sp.year ?? ''
+  const uploadedBy = sp.uploaded_by ?? ''
 
   const { profile } = await requireAuth()
   const supabase = await createClient()
@@ -82,6 +83,25 @@ export default async function SectionPage({
     .order('name')
   const subsections = (subsectionsData ?? []) as Section[]
 
+  // Fetch all uploaders for the dropdown (unfiltered)
+  const { data: allDocsForUploaders } = await supabase
+    .from('documents')
+    .select('uploaded_by')
+    .eq('section_id', section.id)
+    .is('deleted_at', null)
+    .eq('status', 'ready')
+  const allUploaderIds = [...new Set((allDocsForUploaders ?? []).map((d) => d.uploaded_by).filter(Boolean) as string[])]
+  const allUploaders = new Map<string, string>()
+  if (allUploaderIds.length > 0) {
+    const { data: uploaderRows } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', allUploaderIds)
+    for (const row of uploaderRows ?? []) {
+      allUploaders.set(row.id, row.full_name ?? row.email ?? '—')
+    }
+  }
+
   let query = supabase
     .from('documents')
     .select('*')
@@ -91,6 +111,10 @@ export default async function SectionPage({
 
   if (q) {
     query = query.ilike('name', `%${q}%`)
+  }
+
+  if (uploadedBy) {
+    query = query.eq('uploaded_by', uploadedBy)
   }
 
   if (year) {
@@ -203,13 +227,25 @@ export default async function SectionPage({
           defaultValue={year}
           className="w-28 rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
+        <select
+          name="uploaded_by"
+          defaultValue={uploadedBy}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm max-w-[200px]"
+        >
+          <option value="">Any uploader</option>
+          {[...allUploaders.entries()]
+            .sort(([, a], [, b]) => a.localeCompare(b))
+            .map(([id, name]) => (
+              <option key={id} value={id}>{name}</option>
+            ))}
+        </select>
         <button
           type="submit"
           className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
         >
           Filter
         </button>
-        {(q || month || year) && (
+        {(q || month || year || uploadedBy) && (
           <Link
             href={path}
             className="text-sm text-slate-500 hover:underline self-center"
